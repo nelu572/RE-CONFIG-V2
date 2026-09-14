@@ -4,26 +4,24 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(Rigidbody2D), typeof(BoxCollider2D))]
 public sealed class PlayerMovement : MonoBehaviour
 {
-    [Header("References")]
+    [Header("참조")]
     [SerializeField] private Rigidbody2D body;
-    [SerializeField] private BoxCollider2D bodyCollider;
     [SerializeField] private Transform groundCheck;
-    [SerializeField] private SpriteRenderer visual;
 
-    [Header("Movement")]
-    [SerializeField, Min(0f)] private float maxRunSpeed = 7f;
-    [SerializeField, Min(0f)] private float groundAcceleration = 72f;
-    [SerializeField, Min(0f)] private float airAcceleration = 42f;
+    [Header("이동")]
+    [SerializeField] private float maxRunSpeed = 7f;
+    [SerializeField] private float groundAcceleration = 72f;
+    [SerializeField] private float airAcceleration = 42f;
 
-    [Header("Jump")]
-    [SerializeField, Min(0f)] private float jumpImpulse = 12f;
-    [SerializeField, Min(0f)] private float jumpCutMultiplier = 0.5f;
+    [Header("점프")]
+    [SerializeField] private float jumpImpulse = 12f;
+    [SerializeField] private float jumpCutMultiplier = 0.5f;
 
-    [Header("Forgiveness")]
-    [SerializeField, Min(0f)] private float coyoteTime = 0.12f;
-    [SerializeField, Min(0f)] private float jumpBufferTime = 0.12f;
+    [Header("착지 보정")]
+    [SerializeField] private float coyoteTime = 0.12f;
+    [SerializeField] private float jumpBufferTime = 0.12f;
 
-    [Header("Ground Check")]
+    [Header("지면 감지")]
     [SerializeField] private Vector2 groundCheckSize = new(0.58f, 0.12f);
     [SerializeField] private LayerMask groundLayers;
 
@@ -31,22 +29,21 @@ public sealed class PlayerMovement : MonoBehaviour
     private float coyoteTimer;
     private float jumpBufferTimer;
     private bool grounded;
+    private bool wasGrounded;
 
     public bool IsGrounded => grounded;
+    public float MoveInput => moveInput;
+    public float HorizontalSpeed => body.linearVelocity.x;
+    public float VerticalSpeed => body.linearVelocity.y;
 
     private void Reset()
     {
         body = GetComponent<Rigidbody2D>();
-        bodyCollider = GetComponent<BoxCollider2D>();
-        visual = GetComponent<SpriteRenderer>();
     }
 
     private void Update()
     {
-        if (jumpBufferTimer > 0f)
-        {
-            jumpBufferTimer -= Time.deltaTime;
-        }
+        jumpBufferTimer = Mathf.Max(0f, jumpBufferTimer - Time.deltaTime);
     }
 
     private void FixedUpdate()
@@ -66,53 +63,28 @@ public sealed class PlayerMovement : MonoBehaviour
             jumpBufferTimer = 0f;
             coyoteTimer = 0f;
         }
-    }
 
-    // PlayerInput's Send Messages mode invokes these from the existing Player action map.
-    private void OnMove(InputValue value)
-    {
-        moveInput = Mathf.Clamp(value.Get<Vector2>().x, -1f, 1f);
-
-        if (moveInput != 0f && visual != null)
+        if (grounded && !wasGrounded)
         {
-            visual.flipX = moveInput < 0f;
         }
+
+        wasGrounded = grounded;
     }
 
-    private void OnJump(InputValue value)
+    public void OnMove(InputAction.CallbackContext context)
     {
-        if (value.isPressed)
+        moveInput = Mathf.Clamp(context.ReadValue<Vector2>().x, -1f, 1f);
+    }
+
+    public void OnJump(InputAction.CallbackContext context)
+    {
+        if (context.started)
         {
             jumpBufferTimer = jumpBufferTime;
         }
-        else if (body.linearVelocity.y > 0f)
+        else if (context.canceled && body.linearVelocity.y > 0f)
         {
             body.linearVelocity = new Vector2(body.linearVelocity.x, body.linearVelocity.y * jumpCutMultiplier);
         }
-    }
-
-    public void Configure(
-        Rigidbody2D configuredBody,
-        BoxCollider2D configuredCollider,
-        Transform configuredGroundCheck,
-        SpriteRenderer configuredVisual,
-        LayerMask configuredGroundLayers)
-    {
-        body = configuredBody;
-        bodyCollider = configuredCollider;
-        groundCheck = configuredGroundCheck;
-        visual = configuredVisual;
-        groundLayers = configuredGroundLayers;
-    }
-
-    private void OnDrawGizmosSelected()
-    {
-        if (groundCheck == null)
-        {
-            return;
-        }
-
-        Gizmos.color = Color.cyan;
-        Gizmos.DrawWireCube(groundCheck.position, groundCheckSize);
     }
 }
